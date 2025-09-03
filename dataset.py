@@ -5,7 +5,18 @@ import numpy as np
 import os
 import params
 from skimage import io
+from torch.utils.data import Subset
+from torchvision import datasets
+from torch.utils.data import DataLoader
 
+class ImageFolderWithDomain(datasets.ImageFolder):
+    def __init__(self, root, transform=None, domain_label=0):
+        super().__init__(root, transform=transform)
+        self.domain_label = int(domain_label)
+
+    def __getitem__(self, index):
+        img, label = super().__getitem__(index)          # (PIL -> transform -> tensor), label 0/1
+        return img, label, self.domain_label, index
 
 def get_filenames(main_dir, ignore_label):
     image_paths = []
@@ -24,6 +35,18 @@ def get_filenames(main_dir, ignore_label):
                     image_paths.append(filename)
     return sorted(image_paths)
 
+def get_loaders(site, batch_size, transform, num_workers=0):
+    paths = params.dpath[f"site{site}"]
+
+    train_ds = ImageFolderWithDomain(paths["train"], transform=transform, domain_label=site)
+    val_ds   = ImageFolderWithDomain(paths["val"],   transform=transform, domain_label=site)
+    test_ds  = ImageFolderWithDomain(paths["test"],  transform=transform, domain_label=site)
+
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  num_workers=num_workers, drop_last=True)
+    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=num_workers, drop_last=False)
+    test_loader  = DataLoader(test_ds,  batch_size=batch_size, shuffle=False, num_workers=num_workers, drop_last=False)
+
+    return train_loader, val_loader, test_loader
 
 def get_class(filename):
     # if 'normal' in filename or 'cls-b1' in filename:
@@ -58,7 +81,7 @@ def get_domain(filename):
 
 def _get_all_labels(main_dir):
     labels = []
-    for filename in main_dir:
+    for filename in main_dir:   
         labels.append(get_class(filename))
     return np.asarray(labels)
 
@@ -98,35 +121,55 @@ def _preprocess(img):
     return img
 
 
+import pandas as pd
+
 class CustomDataSet(Dataset):
     def __init__(self, main_dir, transform, preprocess, ignore_label=None):
-        self.main_dir = main_dir
         self.transform = transform
-        self.total_imgs = get_filenames(self.main_dir, ignore_label)
-        self.labels = _get_all_labels(self.total_imgs)
-        self.domains = _get_all_domains(self.total_imgs)
         self.preprocess = preprocess
+
+        # kalau main_dir list → ambil item pertama
+        if isinstance(main_dir, list):
+            main_dir = main_dir[0]
+
+        index_file = os.path.join(main_dir, "index.csv")
+        if os.path.exists(index_file):
+            # === gunakan index.csv (format: path,label,domain,idx) ===
+            df = pd.read_csv(index_file)
+            self.total_imgs = df['path'].tolist()
+            self.labels = df['label'].astype(int).tolist()
+            self.domains = df['domain'].tolist()
+            self.indices = df['idx'].astype(int).tolist()
+        else:
+            # === fallback ke cara lama (folder normal/benign/malignant) ===
+            self.total_imgs = get_filenames([main_dir], ignore_label)
+            self.labels = _get_all_labels(self.total_imgs)
+            self.domains = _get_all_domains(self.total_imgs)
+            self.indices = list(range(len(self.total_imgs)))
 
     def __len__(self):
         return len(self.total_imgs)
 
     def __getitem__(self, idx):
-        #img_fname = os.path.join(self.main_dir, self.total_imgs[idx])
         img_fname = self.total_imgs[idx]
-        #numpy_image = np.array(mpimg.imread(img_fname)).astype(np.float32)
-        #image = PIL.Image.fromarray(np.uint8(np.uint8(numpy_image*255)))
         numpy_image = io.imread(img_fname)
-        # if (numpy_image.shape[0] != 2048 or numpy_image.shape[1] != 2048):
-        #     print('non-squared image')
 
         if self.preprocess:
             numpy_image = _preprocess(numpy_image)
 
         tensor_image = self.transform(numpy_image)
 
-        label = get_class(img_fname)
-        domain = get_domain(img_fname)
-        #tensor_image = self.transform(numpy_image)
+        # ambil label/domain dari index.csv kalau ada
+        if hasattr(self, 'labels'):
+            label = self.labels[idx]
+        else:
+            label = get_class(img_fname)
+
+        if hasattr(self, 'domains'):
+            domain = self.domains[idx]
+        else:
+            domain = get_domain(img_fname)
+
         return (tensor_image, label, domain, idx)
 
 
@@ -150,8 +193,8 @@ def load_data(training_dirs, preprocess, ignore_label,
                                                                       #stratify=dataset.labels)
                                                                       stratify=np.stack((dataset.labels, dataset.domains),).T)
 
-    trainset = Subset(dataset=dataset, indices=train_idx)
-    valset = Subset(dataset=dataset, indices=val_idx)
+    trainset = SubsetWithIndex(dataset, train_idx)
+    valset = SubsetWithIndex(dataset, val_idx)
 
     return trainset, valset
 
