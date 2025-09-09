@@ -17,7 +17,7 @@ n_sites = 3
 
 # optimization hyperparameters
 n_epochs = 51  # number of epochs
-batch_size = 4  # batch size
+batch_size = 2  # batch size
 learning_rate = 1E-5  # learning rate
 weight_decay = 1E-4  # weight decay
 optimizer = 'adam'   # optimizer
@@ -28,7 +28,7 @@ data_seed = 42  # seed for train/val split
 num_workers = 0
 ignore_label = None   # 'benign'   # train normal / cancer
 n_classes = 2  # number of classes
-input_size = 2048  # resize images to input_size pixels
+input_size = 1048  # resize images to input_size pixels
 
 # transformations to apply to the data
 data_transform = transforms.Compose([

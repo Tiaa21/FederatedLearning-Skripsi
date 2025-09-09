@@ -11,8 +11,8 @@ class Classifier(nn.Module):
         self.fc1 = nn.Linear(256, 128)
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, num_classes)
-        self.bn1 = nn.BatchNorm1d(128)
-        self.bn2 = nn.BatchNorm1d(64)
+        self.bn1 = nn.LayerNorm(128)
+        self.bn2 = nn.LayerNorm(64)
         self.drop1 = nn.Dropout()
         self.drop2 = nn.Dropout()
 

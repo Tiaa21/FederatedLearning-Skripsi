@@ -14,7 +14,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 from dataset import get_loaders
 
 warnings.filterwarnings("ignore")
-EPS = 1e-12
+EPS = 1e-10
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -200,7 +200,7 @@ for epoch in range(params.n_epochs):
             dataset_i,
             batch_size=batch_sz_i,
             shuffle=False,
-            num_workers=params.num_workers
+            num_workers=params.num_workers,
         )
         correct_preds_local  = get_predictions(local_models[i], train_loader_eval, len(dataset_i))
         correct_preds_global = get_predictions(global_model,     train_loader_eval, len(dataset_i))
@@ -238,7 +238,7 @@ for epoch in range(params.n_epochs):
                 batch_size=batch_sz_i,
                 shuffle=False,
                 num_workers=params.num_workers,
-                sampler=sampler
+                sampler=sampler,
             )
             new_train_loaders.append(new_loader)
 
