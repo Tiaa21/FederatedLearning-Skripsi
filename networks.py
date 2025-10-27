@@ -11,10 +11,14 @@ class Classifier(nn.Module):
         self.fc1 = nn.Linear(256, 128)
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, num_classes)
-        self.bn1 = nn.LayerNorm(128)
-        self.bn2 = nn.LayerNorm(64)
-        self.drop1 = nn.Dropout()
-        self.drop2 = nn.Dropout()
+        # self.bn1 = nn.GroupNorm(num_groups=8, num_channels=128)  # 128 channels, 8 grup
+        # self.bn2 = nn.GroupNorm(num_groups=8, num_channels=64)
+        # self.bn1 = nn.LayerNorm(128)
+        # self.bn2 = nn.LayerNorm(64)
+        self.bn1 = nn.BatchNorm1d(128)
+        self.bn2 = nn.BatchNorm1d(64)
+        self.drop1 = nn.Dropout(0.2)
+        self.drop2 = nn.Dropout(0.2)
 
     def forward(self, input):
         logits = self.encoder(input)
@@ -47,7 +51,6 @@ class Encoder(nn.Module):
         self.view_resnet.load_state_dict(
             filter_strip_prefix(state_dict, "four_view_resnet.{}.".format(view_angle))
         )
-
         
 class Discriminator(nn.Module):
     def __init__(self, dim_in=256):
@@ -61,7 +64,6 @@ class Discriminator(nn.Module):
         x = self.relu(self.fc1(x))
         x = self.fc2(x)
         return F.sigmoid(x)
-
 
 class ViewResNetV2(nn.Module):
     """

@@ -44,7 +44,9 @@ class BasicBlockV2(nn.Module):
             self.activation = nn.LeakyReLU(inplace=True)
 
         self.bn1 = nn.BatchNorm2d(inplanes)
+        # self.bn1 = nn.GroupNorm(num_groups=min(16, inplanes), num_channels=inplanes)
         self.conv1 = conv3x3(inplanes, planes, stride=stride)
+        # self.bn2 = nn.GroupNorm(num_groups=min(16, planes), num_channels=planes)
         self.bn2 = nn.BatchNorm2d(planes)
         self.conv2 = conv3x3(planes, planes, stride=1)
 

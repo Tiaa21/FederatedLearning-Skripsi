@@ -4,6 +4,7 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 import os
 import params
+from PIL import Image
 from skimage import io
 from torch.utils.data import Subset
 from torchvision import datasets
@@ -24,7 +25,7 @@ def get_filenames(main_dir, ignore_label):
         # r=root, d=directories, f = files
         for r, d, f in os.walk(mydir):
             for file in f:
-                if file.endswith(".png"):
+                if file.endswith((".jpg", ".jpeg", ".png")):
                     if ignore_label == 'normal':
                         if 'normal' in os.path.join(r, file) or 'cls-b1' in os.path.join(r, file):
                             continue
@@ -49,34 +50,56 @@ def get_loaders(site, batch_size, transform, num_workers=0):
     return train_loader, val_loader, test_loader
 
 def get_class(filename):
-    # if 'normal' in filename or 'cls-b1' in filename:
-    if 'normal' in filename or 'benign' in filename:
+    # contoh kalau nama file ada kata benign/malignant
+    if "benign" in filename.lower():
         label = 0
-    elif 'malignant' in filename:
+    elif "malignant" in filename.lower():
         label = 1
-    # elif 'benign' in filename:
-    #     label = 2
     else:
-        print('error: unknown class')
+        raise ValueError(f"Unknown class in filename: {filename}")
     return label
-
 
 def get_domain(filename):
-    if 'inbreast' in filename:
-        label = 0
-    elif 'hologic' in filename:
-        label = 1
-    elif 'ge' in filename:
-        label = 2
-    elif 'ddsm' in filename:
-        label = 3
-    elif 'fujifilm' in filename:
-        label = 4
-    elif 'planmed' in filename:
-        label = 5
+    """
+    Map site directories to domain index:
+    site0 -> 0, site1 -> 1, site2 -> 2
+    """
+    lower = filename.lower()
+    if os.path.sep + 'site0' + os.path.sep in lower:
+        return 0
+    elif os.path.sep + 'site1' + os.path.sep in lower:
+        return 1
+    elif os.path.sep + 'site2' + os.path.sep in lower:
+        return 2
     else:
-        print('error: unknown domain')
-    return label
+        # fallback: check path parts
+        parts = lower.split(os.path.sep)
+        if 'site0' in parts:
+            return 0
+        elif 'site1' in parts:
+            return 1
+        elif 'site2' in parts:
+            return 2
+        else:
+            raise ValueError(f"Unknown domain for file: {filename}")
+
+# def get_domain(filename):
+#     fname = filename.lower()
+#     if 'inbreast' in fname:
+#         return 0
+#     elif 'hologic' in fname:
+#         return 1
+#     elif 'ge' in fname:
+#         return 2
+#     elif 'ddsm' in fname:
+#         return 3
+#     elif 'fujifilm' in fname:
+#         return 4
+#     elif 'planmed' in fname:
+#         return 5
+#     else:
+#         # jika domain tidak dikenali, lemparkan error agar kita tahu
+#         raise ValueError(f"Unknown domain in filename: {filename}")
 
 
 def _get_all_labels(main_dir):
@@ -153,11 +176,11 @@ class CustomDataSet(Dataset):
     def __getitem__(self, idx):
         img_fname = self.total_imgs[idx]
         numpy_image = io.imread(img_fname)
-
         if self.preprocess:
             numpy_image = _preprocess(numpy_image)
-
-        tensor_image = self.transform(numpy_image)
+        # convert to uint8 then to PIL
+        pil_img = Image.fromarray((numpy_image).astype('uint8'))
+        tensor_image = self.transform(pil_img)
 
         # ambil label/domain dari index.csv kalau ada
         if hasattr(self, 'labels'):
@@ -171,7 +194,6 @@ class CustomDataSet(Dataset):
             domain = get_domain(img_fname)
 
         return (tensor_image, label, domain, idx)
-
 
 # load training and val datasets
 def load_data(training_dirs, preprocess, ignore_label,
@@ -193,10 +215,11 @@ def load_data(training_dirs, preprocess, ignore_label,
                                                                       #stratify=dataset.labels)
                                                                       stratify=np.stack((dataset.labels, dataset.domains),).T)
 
-    trainset = SubsetWithIndex(dataset, train_idx)
-    valset = SubsetWithIndex(dataset, val_idx)
+    trainset = Subset(dataset, train_idx)
+    valset = Subset(dataset, val_idx)
 
     return trainset, valset
+
 
 
 class WeightedSubsetRandomSampler(Sampler):
